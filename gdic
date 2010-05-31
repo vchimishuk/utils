@@ -1,0 +1,132 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# Simple script for translation text with google translate service.
+# Copyright (c) 2009  Viacheslav Chumushuk <voice@root.ua>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+# BUGS:
+# - Work only en -> ru translation, other have problems with encoding.
+
+
+import sys
+import getopt
+import httplib
+import urllib;
+import getopt
+
+
+# Supported languages list.
+supported_langs = (
+	{'abbr': 'en', 'name': 'english'},
+	{'abbr': 'it', 'name': 'italian'},
+	{'abbr': 'ru', 'name': 'russian'},
+	{'abbr': 'uk', 'name': 'ukrainian'},
+)
+
+
+# Source text language.
+from_lang = ''
+# Translate to language.
+to_lang = ''
+# Text to translate.
+text = ''
+# Translate service domain.
+dic_domain = "translate.google.ru"
+# Translate service URL.
+dic_request = "/translate_a/t?client=t&text=%s&sl=%s&tl=%s&otf=1&pc=1"
+
+
+def usage():
+    """ Print usage information. """
+    global supported_langs
+    
+    print "Usage: gdic [OPTION...] TEXT"
+    print "Translate text with google translate engine."
+    print
+    print "  -h, --help                    Show this help information"
+    print "  -f, --from-lang=<lang>        Original text language"
+    print "  -t, --to-lang=<lang>          Translate to language"
+    print
+    print " Supported languages:"
+    
+    for lang in supported_langs:
+        print "  %s                           %s" % (lang['abbr'], lang['name'])
+
+
+try:
+    opts, text = getopt.getopt(sys.argv[1:], "hf:t:", ["help", "from-lang=", "to-lang="])
+except getopt.GetoptError, err:
+    # Print help information and exit.
+    print str(err) # Will print something like "option -a not recognized"
+    usage()
+    sys.exit(2)
+
+
+for o, a in opts:
+    if o in ("-h", "--help"):
+        usage()
+        sys.exit(0)
+    elif o in ("-f", "--fron-lang"):
+        from_lang = a
+    elif o in ("-t", "--to-lang"):
+        to_lang = a
+    else:
+	print "gdic: invalid option -- '%s'" % o
+	print "Try `gdic --help' for more information."
+	sys.exit(2)
+
+
+langs_abbr = [l['abbr'] for l in supported_langs]
+if (from_lang not in langs_abbr) or (to_lang not in langs_abbr):
+    usage()
+    sys.exit(2)
+
+text = urllib.quote(" ".join(text))
+
+
+try:
+    conn = httplib.HTTPConnection(dic_domain)
+except httplib.HTTPException:
+    print "Failed to connect to remote translate service."
+    sys.exit(1)
+
+conn.request("GET", dic_request % (text, from_lang, to_lang,))
+resp = conn.getresponse()
+
+if resp.status != httplib.OK:
+    print "Bad server response."
+    print resp.status, resp.reason
+    sys.exit(2)
+
+data = resp.read()
+conn.close()
+
+encoding = resp.getheader('Content-type').split('=')[1]
+data = unicode(data, encoding)
+data = eval(data)
+
+print "Source (%s): %s" % (from_lang, data['sentences'][0]['orig'])
+print "Translate (%s): %s" % (to_lang, data['sentences'][0]['trans'])
+print "Translit: %s" % data['sentences'][0]['translit']
+if data.has_key('dict'):
+    print
+
+for d in data.get('dict', []):
+    print d['pos']
+    for term in d['terms']:
+        print "\t%s" % term
+
